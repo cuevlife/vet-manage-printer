@@ -38,11 +38,12 @@ async function getRegistryPorts(): Promise<RegistryPortInfo[]> {
 
 async function getActiveUSBPRINTDevices(): Promise<USBDevice[]> {
   const devices: USBDevice[] = []
-  const raw = await wmiQuery('path Win32_PnPEntity WHERE (PNPClass = "USB" OR PNPClass = "System") GET DeviceID,PNPDeviceID,Status,Caption /VALUE')
-  // Parse CSV output
-  const lines = raw.split('\n').map(l => l.trim()).filter(l => l.includes(',') && !l.startsWith('Node'))
-  
-  // Each CSV line: Node,DeviceID,PNPDeviceID,Status,Caption
+  const raw = await runCmd(
+    `wmic path Win32_PnPEntity WHERE (PNPClass = "USB" OR PNPClass = "System") GET DeviceID,PNPDeviceID,Status,Caption /FORMAT:CSV 2>nul`
+  )
+  // CSV format returns: Node,DeviceID,PNPDeviceID,Status,Caption
+  const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0 && !l.startsWith('Node'))
+
   for (const line of lines) {
     const parts = line.split(',')
     if (parts.length < 5) continue
@@ -50,24 +51,21 @@ async function getActiveUSBPRINTDevices(): Promise<USBDevice[]> {
     const pnpId = parts[2]?.trim() || ''
     const status = parts[3]?.trim() || ''
     const caption = parts[4]?.trim() || ''
-    
+
     if (status !== 'OK') continue
-    
-    // Extract VID from PNPDeviceID
+
+    // Extract VID/PID from PNPDeviceID
     const vidMatch = pnpId.match(/VID_([0-9A-F]{4})/i)
     const pidMatch = pnpId.match(/PID_([0-9A-F]{4})/i)
     const vid = vidMatch ? vidMatch[1] : ''
     const pid = pidMatch ? pidMatch[1] : ''
-    
-    // Look for USBPRINT in device chain
-    const isUSBPrint = pnpId.includes('USBPRINT')
-    
+
     devices.push({
       portName: '',
       vid,
       pid,
       model: caption || pnpId,
-      isActive: status === 'OK',
+      isActive: true,
       instancePath: pnpId
     })
   }
