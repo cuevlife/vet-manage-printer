@@ -1,0 +1,28 @@
+appId: com.vetmanage.printer-driver
+productName: VET MANAGE Printer Driver
+directories:
+  output: release
+files:
+  - out/**/*
+  - resources/**/*
+extraResources:
+  - from: resources/
+    to: resources/
+    filter:
+      - "**/*"
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: resources/icon.ico
+  requestedExecutionLevel: requireAdministrator
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  installerIcon: resources/icon.ico
+  uninstallerIcon: resources/icon.ico
+  installerHeaderIcon: resources/icon.ico
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: VET MANAGE Printer Driver
