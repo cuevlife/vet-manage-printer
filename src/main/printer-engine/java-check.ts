@@ -67,6 +67,20 @@ export async function installJava(): Promise<boolean> {
   }
 }
 
+export async function uninstallJava(): Promise<boolean> {
+  try {
+    await killProcess('java.exe')
+    await killProcess('javaw.exe')
+    const raw = await runCmd(
+      `powershell -NoProfile -Command "Get-CimInstance Win32_Product | Where-Object { \$_.Name -match 'Java|Adoptium|Temurin|OpenJDK' } | ForEach-Object { \$_.Uninstall() }"`,
+      { timeout: 120000 }
+    )
+    return raw.length > 0
+  } catch {
+    return false
+  }
+}
+
 export async function createVetManageShortcut(subdomain: string): Promise<void> {
   const url = `https://${subdomain}.vetmanage.co/login.php`
   const desktop = app.getPath('desktop')

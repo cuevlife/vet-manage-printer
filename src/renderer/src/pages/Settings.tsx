@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Trash2, Info } from 'lucide-react'
+import { Trash2, Info, Coffee } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card'
 import { Separator } from '../components/ui/separator'
@@ -66,6 +66,34 @@ export default function Settings() {
           details={result.error ? [result.error] : ['ถอนการติดตั้งสำเร็จ']}
         />
       )}
+
+      {/* Uninstall Java */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Coffee size={18} className="text-amber-600" />
+            Java Runtime (สำหรับ SmartCard)
+          </CardTitle>
+          <CardDescription>Java ที่ใช้กับเครื่องอ่านบัตรประชาชน</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={async () => {
+              if (!confirm('แน่ใจหรือว่าต้องการถอน Java? SmartCard จะไม่ทำงาน')) return
+              setUninstalling('java')
+              setResult(null)
+              const ok = await printerApi.uninstallJava()
+              setResult({ component: 'Java' as ComponentType, success: ok, error: ok ? undefined : 'ไม่พบ Java ในระบบ' })
+              setUninstalling(null)
+            }}
+            disabled={uninstalling === 'java'}
+          >
+            {uninstalling === 'java' ? 'กำลังถอน...' : 'ถอน Java'}
+          </Button>
+        </CardContent>
+      </Card>
 
       <Separator />
 

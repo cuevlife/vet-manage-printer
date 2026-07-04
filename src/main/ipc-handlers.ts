@@ -3,7 +3,7 @@ import {
   listAllUSBDevices, detectUSBPort,
   installPrinter, uninstallPrinter, uninstallComponent, testPrint,
   runDiagnostics, fixByReport,
-  checkJavaInstalled, installJava, createVetManageShortcut, removeVetManageShortcut,
+  checkJavaInstalled, installJava, uninstallJava, createVetManageShortcut, removeVetManageShortcut,
   PRINTER_DEFINITIONS, InstallProgress, ConnectionType, ComponentType, InstallResult
 } from './printer-engine'
 
@@ -94,6 +94,10 @@ export function registerIpcHandlers() {
 
   ipcMain.handle('java:install', async () => {
     return installJava()
+  })
+
+  ipcMain.handle('java:uninstall', async () => {
+    return uninstallJava()
   })
 
   // ── Ping (testing) ──

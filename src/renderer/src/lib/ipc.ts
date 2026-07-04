@@ -27,6 +27,7 @@ export const printerApi = {
   // Java
   checkJava: () => api.invoke('java:check') as Promise<boolean>,
   installJava: () => api.invoke('java:install') as Promise<boolean>,
+  uninstallJava: () => api.invoke('java:uninstall') as Promise<boolean>,
 
   // Events
   onInstallProgress: (callback: (progress: InstallProgress) => void) => api.on('install:progress', callback as (...args: unknown[]) => void)
