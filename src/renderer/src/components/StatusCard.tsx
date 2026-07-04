@@ -28,23 +28,25 @@ export default function StatusCard({ title, subtitle, status, actions, details }
   return (
     <Card className={cn('border-2', config.bg)}>
       <CardContent className="p-4">
-        <div className="flex items-start justify-between">
-          <div className="flex items-start gap-3">
-            <Icon className={cn('mt-0.5', config.color, status === 'loading' && 'animate-spin')} size={20} />
-            <div>
-              <h4 className="font-semibold text-sm">{title}</h4>
-              {subtitle && <p className="text-xs text-gray-500">{subtitle}</p>}
-              {details && details.length > 0 && (
-                <ul className="mt-1 space-y-0.5">
-                  {details.map((d, i) => (
-                    <li key={i} className="text-xs text-gray-600">{d}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
+        <div className="flex items-start gap-3">
+          <Icon className={cn('mt-0.5 shrink-0', config.color, status === 'loading' && 'animate-spin')} size={20} />
+          <div className="min-w-0 flex-1">
+            <h4 className="font-semibold text-sm">{title}</h4>
+            {subtitle && <p className="text-xs text-gray-500">{subtitle}</p>}
+            {details && details.length > 0 && (
+              <ul className="mt-1 space-y-0.5">
+                {details.map((d, i) => (
+                  <li key={i} className="text-xs text-gray-600 truncate">{d}</li>
+                ))}
+              </ul>
+            )}
           </div>
-          {actions && <div className="flex flex-wrap gap-1.5 shrink-0 ml-4">{actions}</div>}
         </div>
+        {actions && (
+          <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-white/50">
+            {actions}
+          </div>
+        )}
       </CardContent>
     </Card>
   )
