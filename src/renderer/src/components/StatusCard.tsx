@@ -43,7 +43,7 @@ export default function StatusCard({ title, subtitle, status, actions, details }
               )}
             </div>
           </div>
-          {actions && <div className="flex gap-2 shrink-0 ml-4">{actions}</div>}
+          {actions && <div className="flex flex-wrap gap-1.5 shrink-0 ml-4">{actions}</div>}
         </div>
       </CardContent>
     </Card>

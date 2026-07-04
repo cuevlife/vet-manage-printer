@@ -119,15 +119,16 @@ export async function uninstallPrinter(printerName: string): Promise<InstallResu
 }
 
 export async function cleanupAllPrinters(): Promise<void> {
-  const printers = await runCmd(
-    `wmic path Win32_Printer WHERE "Name LIKE '%%VET%%' OR Name LIKE '%%Label%%' OR Name LIKE '%%Bill%%' OR Name LIKE '%%Xprinter%%' OR Name LIKE '%%XP-%%'" GET Name /FORMAT:CSV 2>nul`
+  const raw = await runCmd(
+    `wmic path Win32_Printer GET Name /FORMAT:CSV 2>nul`
   )
-  const lines = printers.split('\n').map(l => l.trim()).filter(l => l.includes(',') && !l.startsWith('Node'))
+  const lines = raw.split('\n').map(l => l.trim()).filter(l => l.includes(',') && !l.startsWith('Node'))
+  const keywords = ['VET', 'Label', 'Bill', 'Xprinter', 'XP-']
   for (const line of lines) {
     const parts = line.split(',')
     if (parts.length >= 2) {
       const name = parts[1].trim()
-      if (name) {
+      if (name && keywords.some(kw => name.toUpperCase().includes(kw.toUpperCase()))) {
         await removePrinterViaPrintUI(name).catch(() => {})
       }
     }

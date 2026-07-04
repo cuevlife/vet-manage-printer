@@ -15,7 +15,7 @@ function statusFrom<T>(value: T, okValue: T): Status {
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { report, loading, run } = useDiagnostics()
+  const { report, loading, error, run } = useDiagnostics()
   const [scanDone, setScanDone] = useState(false)
 
   const [labelPort, setLabelPort] = useState<USBDevice | null>(null)
@@ -24,7 +24,7 @@ export default function Dashboard() {
   const [billScanning, setBillScanning] = useState(false)
 
   useEffect(() => {
-    run().then(() => setScanDone(true))
+    run().finally(() => setScanDone(true))
   }, [run])
 
   const scanLabelPort = async () => {
@@ -69,6 +69,15 @@ export default function Dashboard() {
           </Button>
         </div>
       </div>
+
+      {error && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="p-3 text-sm text-red-700 flex items-center gap-2">
+            <span>⚠️</span>
+            <span>การตรวจสอบล้มเหลว: {error}</span>
+          </CardContent>
+        </Card>
+      )}
 
       {scanDone && report && (
         <div className={`rounded-xl p-4 text-white ${overallColor} flex items-center justify-between`}>
