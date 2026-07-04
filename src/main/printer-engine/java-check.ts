@@ -71,11 +71,27 @@ export async function uninstallJava(): Promise<boolean> {
   try {
     await killProcess('java.exe')
     await killProcess('javaw.exe')
-    const raw = await runCmd(
-      `powershell -NoProfile -Command "Get-CimInstance Win32_Product | Where-Object { \$_.Name -match 'Java|Adoptium|Temurin|OpenJDK' } | ForEach-Object { \$_.Uninstall() }"`,
-      { timeout: 120000 }
-    )
-    return raw.length > 0
+
+    // Use PowerShell -EncodedCommand to avoid quoting issues
+    const script = [
+      '$keys = @(',
+      "  'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall',",
+      "  'HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall'",
+      ')',
+      'foreach ($base in $keys) {',
+      '  Get-ChildItem $base -ErrorAction SilentlyContinue | ForEach-Object {',
+      "    $name = $_.GetValue('DisplayName')",
+      "    $uninstall = $_.GetValue('UninstallString')",
+      "    if ($name -match 'Java|Adoptium|Temurin|OpenJDK' -and $uninstall -match '\\{([^}]+)\\}') {",
+      "      Start-Process msiexec -ArgumentList '/x',$matches[1],'/quiet','/norestart' -Wait -NoNewWindow",
+      '    }',
+      '  }',
+      '}',
+      'Write-Output "DONE"'
+    ].join('\n')
+    const encoded = Buffer.from(script, 'utf16le').toString('base64')
+    await runCmd(`powershell -NoProfile -EncodedCommand ${encoded}`, { timeout: 120000 })
+    return true
   } catch {
     return false
   }
