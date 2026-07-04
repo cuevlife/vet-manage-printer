@@ -1,30 +1,34 @@
 import { DiagnosticReport, PrinterDiagnostic, SmartCardDiagnostic, USBDevice, PRINTER_DEFINITIONS } from './types'
 import { listAllUSBDevices, detectUSBPort } from './usb-detection'
 import { installPrinter } from './driver-install'
-import { runCmd, readRegistry } from './utils'
+import { runCmd, readRegistry, wmiFilter, parseCSV } from './utils'
 import { InstallResult } from './types'
 
 async function checkPrinter(printerName: string): Promise<PrinterDiagnostic> {
   const details: string[] = []
-  
-  const raw = await runCmd(
-    `wmic path Win32_Printer WHERE Name="${printerName}" GET Name,DriverName,PortName,PrinterStatus,WorkOffline /FORMAT:CSV 2>nul`
-  )
 
-  const installed = raw.includes(printerName)
-  
-  if (!installed) {
+  let raw: string
+  try {
+    raw = await wmiFilter('Win32_Printer', `Name = '${printerName}'`)
+  } catch {
+    details.push(`❌ ไม่สามารถตรวจสอบ ${printerName} ได้`)
+    return { installed: false, connected: false, driverOk: false, portConfigured: false, printerOnline: false, details }
+  }
+
+  const rows = parseCSV(raw)
+  if (rows.length < 2) {
     details.push(`❌ ไม่พบ ${printerName} ในระบบ`)
     return { installed: false, connected: false, driverOk: false, portConfigured: false, printerOnline: false, details }
   }
 
   details.push(`✅ ${printerName} มีในระบบ`)
+  const header = rows[0]
+  const data = rows[1]
 
-  const portMatch = raw.match(/,([^,]+),([^,]+),(\d+),(\d+)/)
-  const portName = portMatch?.[1]?.trim() || ''
-  const driverName = portMatch?.[2]?.trim() || ''
-  const printerStatus = parseInt(portMatch?.[3] || '0')
-  const workOffline = parseInt(portMatch?.[4] || '0')
+  const portName = data[header.indexOf('PortName')] || ''
+  const driverName = data[header.indexOf('DriverName')] || ''
+  const printerStatus = parseInt(data[header.indexOf('PrinterStatus')] || '0')
+  const workOffline = parseInt(data[header.indexOf('WorkOffline')] || '0')
 
   const hasPort = portName.length > 0
   if (hasPort) {

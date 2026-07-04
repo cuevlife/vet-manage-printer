@@ -25,9 +25,61 @@ export function runCmdSync(cmd: string): string {
   }
 }
 
-// WMI query helper
+// WMI query via PowerShell (wmic was removed in Windows 11)
 export async function wmiQuery(query: string): Promise<string> {
-  return runCmd(`wmic ${query} /FORMAT:CSV 2>nul`, { timeout: 10000 })
+  return runCmd(
+    `powershell -Command "Get-CimInstance ${query} | ConvertTo-Csv -NoTypeInformation"`,
+    { timeout: 15000 }
+  )
+}
+
+// WMI query with filter — returns CSV parsed into array of objects
+// Usage: wmiFilter('Win32_Printer', 'Name LIKE "%VET%"')
+// Escapes single quotes for PowerShell
+export async function wmiFilter(className: string, filter?: string): Promise<string> {
+  const f = filter ? ` -Filter "${filter.replace(/"/g, '\\"')}"` : ''
+  return runCmd(
+    `powershell -Command "Get-CimInstance ${className}${f} | ConvertTo-Csv -NoTypeInformation"`,
+    { timeout: 15000 }
+  )
+}
+
+// WMI action (SET/DELETE) via PowerShell
+export async function wmiAction(className: string, filter: string, action: string): Promise<string> {
+  return runCmd(
+    `powershell -Command "Get-CimInstance ${className} -Filter \\"${filter.replace(/"/g, '\\"')}\\" | ${action}"`,
+    { timeout: 15000 }
+  )
+}
+
+// WMI set property via PowerShell
+export async function wmiSet(className: string, filter: string, properties: Record<string, string>): Promise<string> {
+  const props = Object.entries(properties)
+    .map(([k, v]) => `'${k}'='${v.replace(/'/g, "''")}'`)
+    .join(';')
+  return runCmd(
+    `powershell -Command "Get-CimInstance ${className} -Filter \\"${filter.replace(/"/g, '\\"')}\\" | Set-CimInstance -Property @{${props}}"`,
+    { timeout: 15000 }
+  )
+}
+
+// WMI get via PowerShell
+export async function wmiGet(className: string, filter: string, properties: string[]): Promise<string> {
+  const props = properties.join(',')
+  const f = filter ? ` -Filter "${filter.replace(/"/g, '\\"')}"` : ''
+  return runCmd(
+    `powershell -Command "Get-CimInstance ${className}${f} | Select-Object ${props} | ConvertTo-Csv -NoTypeInformation"`,
+    { timeout: 15000 }
+  )
+}
+
+// Parse PowerShell CSV output (ConvertTo-Csv format with headers)
+// Returns array of header + data rows (first row is header)
+export function parseCSV(csv: string): string[][] {
+  const lines = csv.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+  // Filter out non-data lines, keep quoted CSV lines
+  return lines.filter(l => l.startsWith('"'))
+    .map(l => l.split('","').map(s => s.replace(/^"|"$/g, '')))
 }
 
 // Registry read helper

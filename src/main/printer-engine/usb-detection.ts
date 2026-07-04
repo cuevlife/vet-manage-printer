@@ -1,7 +1,5 @@
 import { USBDevice, USB_KEYWORDS, VID_PID_MAP } from './types'
-import { wmiQuery, readRegistry, enumRegistryKeys, runCmd } from './utils'
-
-// ─── Helpers ───
+import { wmiFilter, runCmd, readRegistry, enumRegistryKeys, parseCSV } from './utils'
 
 function matchesKeywords(model: string, keywords: string[]): boolean {
   const upper = model.toUpperCase()
@@ -36,109 +34,119 @@ async function getRegistryPorts(): Promise<RegistryPortInfo[]> {
   return ports
 }
 
-async function getActiveUSBPRINTDevices(): Promise<USBDevice[]> {
+async function getActiveUSBDevices(): Promise<USBDevice[]> {
   const devices: USBDevice[] = []
-  const raw = await runCmd(
-    `wmic path Win32_PnPEntity GET DeviceID,PNPDeviceID,Status,Caption,PNPClass /FORMAT:CSV 2>nul`
-  )
-  const lines = raw.split('\n').map(l => l.trim()).filter(l => l.includes(',') && !l.startsWith('Node'))
+  try {
+    const raw = await wmiFilter('Win32_PnPEntity', "PNPClass = 'USB' OR PNPClass = 'System'")
+    const rows = parseCSV(raw)
+    const header = rows[0]
+    if (!header) return []
+    const dataRows = rows.slice(1)
+    for (const row of dataRows) {
+      const status = row[header.indexOf('Status')] || ''
+      const pnpId = row[header.indexOf('PNPDeviceID')] || ''
+      const caption = row[header.indexOf('Caption')] || ''
+      if (status !== 'OK') continue
 
-  for (const line of lines) {
-    const parts = line.split(',')
-    if (parts.length < 6) continue
-    const deviceId = parts[1]?.trim() || ''
-    const pnpId = parts[2]?.trim() || ''
-    const status = parts[3]?.trim() || ''
-    const caption = parts[4]?.trim() || ''
-    const pnpClass = parts[5]?.trim() || ''
-
-    if (status !== 'OK') continue
-    if (pnpClass !== 'USB' && pnpClass !== 'System') continue
-
-    const vidMatch = pnpId.match(/VID_([0-9A-F]{4})/i)
-    const pidMatch = pnpId.match(/PID_([0-9A-F]{4})/i)
-    const vid = vidMatch ? vidMatch[1] : ''
-    const pid = pidMatch ? pidMatch[1] : ''
-
-    devices.push({
-      portName: '',
-      vid,
-      pid,
-      model: caption || pnpId,
-      isActive: true,
-      instancePath: pnpId
-    })
-  }
-  return devices.filter(d => d.isActive)
-}
-
-async function getUSBPRINTDeviceModels(): Promise<USBDevice[]> {
-  const devices: USBDevice[] = []
-  const raw = await runCmd(
-    `wmic path Win32_PnPEntity WHERE "DeviceID LIKE 'USBPRINT%%'" GET DeviceID,Status,Caption /FORMAT:CSV 2>nul`
-  )
-  const lines = raw.split('\n').map(l => l.trim()).filter(l => l.includes(',') && !l.startsWith('Node'))
-  
-  for (const line of lines) {
-    const parts = line.split(',')
-    if (parts.length < 4) continue
-    const deviceId = parts[1]?.trim() || ''
-    const status = parts[2]?.trim() || ''
-    const caption = parts[3]?.trim() || ''
-    if (status !== 'OK') continue
-
-    // Parse USBPRINT\MODEL\INSTANCE\USBXXX
-    const modelMatch = deviceId.match(/USBPRINT\\([^\\]+)/i)
-    const portMatch = deviceId.match(/USB(\d{3})/i)
-    const model = modelMatch ? modelMatch[1] : caption
-    const portName = portMatch ? `USB${portMatch[1]}` : ''
-
-    devices.push({
-      portName,
-      vid: '',
-      pid: '',
-      model,
-      isActive: true,
-      instancePath: deviceId
-    })
+      const vidMatch = pnpId.match(/VID_([0-9A-F]{4})/i)
+      const pidMatch = pnpId.match(/PID_([0-9A-F]{4})/i)
+      devices.push({
+        portName: '',
+        vid: vidMatch ? vidMatch[1] : '',
+        pid: pidMatch ? pidMatch[1] : '',
+        model: caption || pnpId,
+        isActive: true,
+        instancePath: pnpId
+      })
+    }
+  } catch {
+    // Fallback: pnputil
+    const fallback = await runCmd('pnputil /enum-devices', { timeout: 10000 })
+    const lines = fallback.split('\n').map(l => l.trim())
+    for (const line of lines) {
+      if (line.includes('USB\\VID_')) {
+        const vidMatch = line.match(/VID_([0-9A-F]{4})/i)
+        const pidMatch = line.match(/PID_([0-9A-F]{4})/i)
+        const nameMatch = line.match(/: (.+)/)
+        devices.push({
+          portName: '',
+          vid: vidMatch ? vidMatch[1] : '',
+          pid: pidMatch ? pidMatch[1] : '',
+          model: nameMatch ? nameMatch[1] : line,
+          isActive: true,
+          instancePath: line
+        })
+      }
+    }
   }
   return devices
 }
 
-async function getPortDescriptionFromPrintUI(portName: string): Promise<string> {
+async function getUSBPRINTDevices(): Promise<USBDevice[]> {
+  const devices: USBDevice[] = []
   try {
-    const raw = await runCmd(
-      `wmic path Win32_TCPIPPrinterPort WHERE Name='${portName}' GET Description /VALUE 2>nul`
-    )
-    const match = raw.match(/Description=(.+)/)
-    return match ? match[1].trim() : ''
+    const raw = await wmiFilter('Win32_PnPEntity', "DeviceID LIKE 'USBPRINT%'")
+    const rows = parseCSV(raw)
+    const header = rows[0]
+    if (!header) return []
+    for (const row of rows.slice(1)) {
+      const deviceId = row[header.indexOf('DeviceID')] || ''
+      const status = row[header.indexOf('Status')] || ''
+      const caption = row[header.indexOf('Caption')] || ''
+      if (status !== 'OK') continue
+      const modelMatch = deviceId.match(/USBPRINT\\([^\\]+)/i)
+      const portMatch = deviceId.match(/USB(\d{3})/i)
+      devices.push({
+        portName: portMatch ? `USB${portMatch[1]}` : '',
+        vid: '', pid: '',
+        model: modelMatch ? modelMatch[1] : caption,
+        isActive: true,
+        instancePath: deviceId
+      })
+    }
   } catch {
-    return ''
+    // Fallback: registry
+    const raw = await runCmd(
+      `reg query "HKLM\\SYSTEM\\CurrentControlSet\\Enum\\USBPRINT" /s 2>nul | findstr /R "USB\\\\d{3}"`
+    )
+    const lines = raw.split('\n').map(l => l.trim()).filter(Boolean)
+    for (const line of lines) {
+      const portMatch = line.match(/USB(\d{3})/)
+      if (portMatch) {
+        devices.push({
+          portName: `USB${portMatch[1]}`,
+          vid: '', pid: '',
+          model: 'USB Printer',
+          isActive: true,
+          instancePath: line
+        })
+      }
+    }
   }
+  return devices
 }
 
-// ─── Main detection ───
+async function verifyPortActive(portName: string): Promise<boolean> {
+  try {
+    const raw = await wmiFilter('Win32_PnPEntity', `DeviceID LIKE '%USBPRINT%${portName}%'`)
+    return raw.includes('OK') || raw.includes(portName)
+  } catch {
+    return false
+  }
+}
 
 export async function listAllUSBDevices(): Promise<USBDevice[]> {
   const all: USBDevice[] = []
   const seen = new Set<string>()
 
-  // Method 1-2: Active USB devices with VID/PID
-  const activeDevices = await getActiveUSBPRINTDevices()
-  for (const d of activeDevices) {
-    if (!seen.has(d.instancePath)) {
-      seen.add(d.instancePath)
-      all.push(d)
-    }
+  const active = await getActiveUSBDevices()
+  for (const d of active) {
+    if (!seen.has(d.instancePath)) { seen.add(d.instancePath); all.push(d) }
   }
 
-  // Method 3: USBPRINT model names
-  const usbprintDevices = await getUSBPRINTDeviceModels()
-  for (const d of usbprintDevices) {
-    if (!seen.has(d.instancePath)) {
-      seen.add(d.instancePath)
-      all.push(d)
-    }
+  const usbprint = await getUSBPRINTDevices()
+  for (const d of usbprint) {
+    if (!seen.has(d.instancePath)) { seen.add(d.instancePath); all.push(d) }
   }
 
   return all
@@ -152,41 +160,26 @@ export async function detectUSBPort(type: 'label' | 'bill'): Promise<USBDevice |
   const registryPorts = await getRegistryPorts()
   for (const rp of registryPorts) {
     if (matchesKeywords(rp.description + ' ' + rp.hwid, keywords)) {
-      // Verify: check USBPRINT device has this port
-      const raw = await runCmd(
-        `wmic path Win32_PnPEntity WHERE "DeviceID LIKE 'USBPRINT%%${rp.portName}'" GET Status /FORMAT:CSV 2>nul`
-      )
-      if (raw.includes('OK')) {
-        return {
-          portName: rp.portName,
-          vid: '',
-          pid: '',
-          model: rp.description,
-          isActive: true,
-          instancePath: rp.devicePath
-        }
+      if (await verifyPortActive(rp.portName)) {
+        return { portName: rp.portName, vid: '', pid: '', model: rp.description, isActive: true, instancePath: rp.devicePath }
       }
     }
   }
 
-  // Method 2: VID/PID match from active USB devices
-  const activeDevices = await getActiveUSBPRINTDevices()
+  // Method 2: VID/PID match
+  const activeDevices = await getActiveUSBDevices()
   for (const d of activeDevices) {
     if (matchesVID(d.vid, validVIDs)) {
-      // Find the USBPRINT port for this device
-      const printDevices = await getUSBPRINTDeviceModels()
+      const printDevices = await getUSBPRINTDevices()
       for (const pd of printDevices) {
-        if (pd.portName) {
-          return { ...pd, vid: d.vid, pid: d.pid }
-        }
+        if (pd.portName) return { ...pd, vid: d.vid, pid: d.pid }
       }
-      // If no port yet but VID matches, return the device
       return d
     }
   }
 
   // Method 3: USBPRINT model match
-  const usbprintDevices = await getUSBPRINTDeviceModels()
+  const usbprintDevices = await getUSBPRINTDevices()
   for (const d of usbprintDevices) {
     if (d.model !== 'UNKNOWNPRINTER' && matchesKeywords(d.model, keywords)) {
       return d
@@ -195,43 +188,33 @@ export async function detectUSBPort(type: 'label' | 'bill'): Promise<USBDevice |
 
   // Method 4: Single UNKNOWNPRINTER
   const unknown = usbprintDevices.filter(d => d.model === 'UNKNOWNPRINTER')
-  if (unknown.length === 1) {
-    return unknown[0]
-  }
+  if (unknown.length === 1) return unknown[0]
 
-  // Method 5: Get-PrinterPort description
-  const printerPortsRaw = await runCmd(
-    `wmic path Win32_PrinterPort WHERE Name LIKE 'USB%' GET Name,Description /FORMAT:CSV 2>nul`
-  )
-  const portLines = printerPortsRaw.split('\n').map(l => l.trim()).filter(l => l.includes(',') && !l.startsWith('Node'))
-  for (const line of portLines) {
-    const parts = line.split(',')
-    if (parts.length < 3) continue
-    const pName = parts[1]?.trim() || ''
-    const pDesc = parts[2]?.trim() || ''
-    if (matchesKeywords(pDesc, keywords)) {
-      // Verify active
-      const raw = await runCmd(
-        `wmic path Win32_PnPEntity WHERE "DeviceID LIKE 'USBPRINT%%${pName}'" GET Status /FORMAT:CSV 2>nul`
-      )
-      if (raw.includes('OK')) {
-        return { portName: pName, vid: '', pid: '', model: pDesc, isActive: true, instancePath: '' }
+  // Method 5: Printer port description
+  try {
+    const raw = await wmiFilter('Win32_PrinterPort')
+    const rows = parseCSV(raw)
+    const header = rows[0]
+    if (header) {
+      for (const row of rows.slice(1)) {
+        const name = row[header.indexOf('Name')] || ''
+        if (!name.startsWith('USB')) continue
+        const desc = row[header.indexOf('Description')] || ''
+        if (matchesKeywords(desc, keywords) && await verifyPortActive(name)) {
+          return { portName: name, vid: '', pid: '', model: desc, isActive: true, instancePath: '' }
+        }
       }
     }
-  }
+  } catch {}
 
-  // Method 6-7: Single / Last USB port
-  if (usbprintDevices.length === 1) {
-    return usbprintDevices[0]
-  }
+  // Method 6-7: Single/Last USB port
+  if (usbprintDevices.length === 1) return usbprintDevices[0]
   if (usbprintDevices.length > 1) {
-    // Return highest-numbered USB port (most recently connected)
-    const sorted = usbprintDevices.sort((a, b) => {
+    return usbprintDevices.sort((a, b) => {
       const numA = parseInt(a.portName.replace('USB', '')) || 0
       const numB = parseInt(b.portName.replace('USB', '')) || 0
       return numB - numA
-    })
-    return sorted[0]
+    })[0]
   }
 
   // Method 8: Hard fail

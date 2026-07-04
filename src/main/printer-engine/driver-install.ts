@@ -2,7 +2,8 @@ import { PrinterConfig, InstallProgress, InstallResult, ComponentType, PRINTER_D
 import { detectUSBPort, listAllUSBDevices } from './usb-detection'
 import {
   addDriverViaPnputil, installPrinterViaPrintUI, removePrinterViaPrintUI,
-  createTCPIPPort, runCmd, fileExists, killProcess, removeDriverViaPnputil
+  createTCPIPPort, runCmd, fileExists, killProcess, removeDriverViaPnputil,
+  wmiSet, wmiGet, parseCSV, wmiAction
 } from './utils'
 import { app } from 'electron'
 import { join } from 'path'
@@ -77,22 +78,16 @@ export async function installPrinter(
 
     if (portName) {
       progress('config-port', 75, `กำลังตั้งค่าพอร์ต ${portName}...`)
-      await runCmd(
-        `wmic path Win32_Printer WHERE Name="${config.printerName}" SET PortName="${portName}" 2>nul`
-      )
+      await wmiSet('Win32_Printer', `Name='${config.printerName}'`, { PortName: portName }).catch(() => {})
     }
 
     if (configDatPath && existsSync(configDatPath)) {
       progress('restore-config', 85, 'กำลังกู้คืนการตั้งค่า...')
-      await runCmd(
-        `wmic path Win32_Printer WHERE Name="${config.printerName}" SET ConfigFile="${configDatPath}" 2>nul`
-      )
+      await wmiSet('Win32_Printer', `Name='${config.printerName}'`, { ConfigFile: configDatPath }).catch(() => {})
     }
 
     progress('finalize', 95, 'กำลังตั้งค่าเริ่มต้น...')
-    await runCmd(
-      `wmic path Win32_Printer WHERE Name="${config.printerName}" SET Default=True 2>nul`
-    )
+    await wmiSet('Win32_Printer', `Name='${config.printerName}'`, { Default: 'True' }).catch(() => {})
 
     progress('done', 100, `ติดตั้ง ${config.printerName} เสร็จสมบูรณ์`)
 
@@ -108,9 +103,7 @@ export async function uninstallPrinter(printerName: string): Promise<InstallResu
   try {
     await removePrinterViaPrintUI(printerName)
 
-    await runCmd(
-      `wmic path Win32_Printer WHERE Name="${printerName}" DELETE 2>nul`
-    )
+    await wmiAction('Win32_Printer', `Name='${printerName}'`, 'Remove-CimInstance').catch(() => {})
 
     return { component, success: true }
   } catch (err: any) {
@@ -119,20 +112,18 @@ export async function uninstallPrinter(printerName: string): Promise<InstallResu
 }
 
 export async function cleanupAllPrinters(): Promise<void> {
-  const raw = await runCmd(
-    `wmic path Win32_Printer GET Name /FORMAT:CSV 2>nul`
-  )
-  const lines = raw.split('\n').map(l => l.trim()).filter(l => l.includes(',') && !l.startsWith('Node'))
-  const keywords = ['VET', 'Label', 'Bill', 'Xprinter', 'XP-']
-  for (const line of lines) {
-    const parts = line.split(',')
-    if (parts.length >= 2) {
-      const name = parts[1].trim()
+  try {
+    const raw = await wmiGet('Win32_Printer', '', ['Name'])
+    const rows = parseCSV(raw)
+    const header = rows[0]
+    const keywords = ['VET', 'Label', 'Bill', 'Xprinter', 'XP-']
+    for (const row of rows.slice(1)) {
+      const name = row[header.indexOf('Name')] || ''
       if (name && keywords.some(kw => name.toUpperCase().includes(kw.toUpperCase()))) {
         await removePrinterViaPrintUI(name).catch(() => {})
       }
     }
-  }
+  } catch {} // Silently fail cleanup
 }
 
 export async function uninstallComponent(
