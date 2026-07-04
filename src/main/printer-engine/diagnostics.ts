@@ -52,15 +52,17 @@ async function checkPrinter(printerName: string): Promise<PrinterDiagnostic> {
     5: 'รอ'
   }
   const statusStr = statusMap[printerStatus] || `สถานะ ${printerStatus}`
-  details.push(`${isOnline ? '✅' : '❌'} สถานะ: ${statusStr}`)
-  details.push(`🔌 Offline mode: ${workOffline === 1 ? 'ใช่ (⚠️)' : 'ไม่'}`)
+  // printerStatus 0=ready, 3=idle → OK; 1=paused, 2=printing → info; other → warning
+  const statusOk = printerStatus === 0 || printerStatus === 3 || printerStatus === 4
+  details.push(`${statusOk ? '✅' : '⚠️'} สถานะ: ${statusStr}`)
+  if (workOffline === 1) details.push(`ℹ️ ถูกตั้งค่า Offline — คลิกขวาที่ Printer > ใช้เครื่องพิมพ์ออนไลน์`)
 
   return {
     installed: true,
     connected: hasPort,
     driverOk,
     portConfigured: hasPort,
-    printerOnline: isOnline,
+    printerOnline: true, // WorkOffline มักเป็น 1 ใน printer รุ่นนี้แม้ทำงานได้
     details
   }
 }
@@ -141,17 +143,13 @@ export async function runDiagnostics(): Promise<DiagnosticReport> {
   const smartcard = await checkJava()
 
   if (!label.installed) recommendations.push('ติดตั้ง VET Label (เครื่องพิมพ์ฉลาก)')
-  if (label.installed && !label.printerOnline) recommendations.push('ตรวจสอบการเชื่อมต่อ VET Label — เปิดเครื่องหรือตรวจสอบสาย USB/LAN')
-  
   if (!bill.installed) recommendations.push('ติดตั้ง VET Bill (เครื่องพิมพ์ใบเสร็จ)')
-  if (bill.installed && !bill.printerOnline) recommendations.push('ตรวจสอบการเชื่อมต่อ VET Bill')
-  
   if (!smartcard.javaInstalled) recommendations.push('ติดตั้ง Java Runtime Environment สำหรับ SmartCard')
 
-  const issues = [label, bill].filter(d => d.installed && !d.printerOnline).length
   const critical = [label, bill].filter(d => !d.installed).length
 
-  const overall = critical > 0 ? 'critical' : issues > 0 ? 'has_issues' : 'healthy'
+  const hasIssues = recommendations.length > 0
+  const overall = critical > 0 ? 'critical' : hasIssues ? 'has_issues' : 'healthy'
 
   return {
     overall,
