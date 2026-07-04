@@ -3,7 +3,7 @@ import { detectUSBPort, listAllUSBDevices } from './usb-detection'
 import {
   addDriverViaPnputil, installPrinterViaPrintUI, removePrinterViaPrintUI,
   createTCPIPPort, runCmd, fileExists, killProcess, removeDriverViaPnputil,
-  wmiSet, wmiGet, parseCSV, wmiAction
+  wmiSet, wmiQuery, parseCSV, wmiAction
 } from './utils'
 import { app } from 'electron'
 import { join } from 'path'
@@ -78,16 +78,16 @@ export async function installPrinter(
 
     if (portName) {
       progress('config-port', 75, `กำลังตั้งค่าพอร์ต ${portName}...`)
-      await wmiSet('Win32_Printer', `Name='${config.printerName}'`, { PortName: portName }).catch(() => {})
+      await wmiSet('Win32_Printer', `\$_.Name -eq '${config.printerName}'`, { PortName: portName }).catch(() => {})
     }
 
     if (configDatPath && existsSync(configDatPath)) {
       progress('restore-config', 85, 'กำลังกู้คืนการตั้งค่า...')
-      await wmiSet('Win32_Printer', `Name='${config.printerName}'`, { ConfigFile: configDatPath }).catch(() => {})
+      await wmiSet('Win32_Printer', `\$_.Name -eq '${config.printerName}'`, { ConfigFile: configDatPath }).catch(() => {})
     }
 
     progress('finalize', 95, 'กำลังตั้งค่าเริ่มต้น...')
-    await wmiSet('Win32_Printer', `Name='${config.printerName}'`, { Default: 'True' }).catch(() => {})
+    await wmiSet('Win32_Printer', `\$_.Name -eq '${config.printerName}'`, { Default: 'True' }).catch(() => {})
 
     progress('done', 100, `ติดตั้ง ${config.printerName} เสร็จสมบูรณ์`)
 
@@ -103,7 +103,7 @@ export async function uninstallPrinter(printerName: string): Promise<InstallResu
   try {
     await removePrinterViaPrintUI(printerName)
 
-    await wmiAction('Win32_Printer', `Name='${printerName}'`, 'Remove-CimInstance').catch(() => {})
+    await wmiAction('Win32_Printer', `\$_.Name -eq '${printerName}'`, 'Remove-CimInstance').catch(() => {})
 
     return { component, success: true }
   } catch (err: any) {
@@ -113,7 +113,7 @@ export async function uninstallPrinter(printerName: string): Promise<InstallResu
 
 export async function cleanupAllPrinters(): Promise<void> {
   try {
-    const raw = await wmiGet('Win32_Printer', '', ['Name'])
+    const raw = await wmiQuery('Win32_Printer', undefined, ['Name'])
     const rows = parseCSV(raw)
     const header = rows[0]
     const keywords = ['VET', 'Label', 'Bill', 'Xprinter', 'XP-']

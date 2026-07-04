@@ -1,7 +1,7 @@
 import { DiagnosticReport, PrinterDiagnostic, SmartCardDiagnostic, USBDevice, PRINTER_DEFINITIONS } from './types'
 import { listAllUSBDevices, detectUSBPort } from './usb-detection'
 import { installPrinter } from './driver-install'
-import { runCmd, readRegistry, wmiFilter, parseCSV } from './utils'
+import { runCmd, readRegistry, wmiQuery, parseCSV } from './utils'
 import { InstallResult } from './types'
 
 async function checkPrinter(printerName: string): Promise<PrinterDiagnostic> {
@@ -9,7 +9,7 @@ async function checkPrinter(printerName: string): Promise<PrinterDiagnostic> {
 
   let raw: string
   try {
-    raw = await wmiFilter('Win32_Printer', `Name = '${printerName}'`)
+    raw = await wmiQuery('Win32_Printer', `$_.Name -eq '${printerName}'`, ['Name', 'DriverName', 'PortName', 'PrinterStatus', 'WorkOffline'])
   } catch {
     details.push(`❌ ไม่สามารถตรวจสอบ ${printerName} ได้`)
     return { installed: false, connected: false, driverOk: false, portConfigured: false, printerOnline: false, details }

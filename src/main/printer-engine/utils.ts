@@ -25,61 +25,49 @@ export function runCmdSync(cmd: string): string {
   }
 }
 
-// WMI query via PowerShell (wmic was removed in Windows 11)
-export async function wmiQuery(query: string): Promise<string> {
+// ─── PowerShell WMI helpers (wmic was removed in Windows 11) ───
+// Uses -EncodedCommand to bypass all quoting issues with exec()→cmd→powershell
+// whereExpr examples (PowerShell Where-Object syntax):
+//   "$_.Name -eq 'VET Label'"
+//   "$_.PNPClass -eq 'USB' -or $_.PNPClass -eq 'System'"
+//   "$_.DeviceID -like 'USBPRINT*'"
+
+function psCmd(script: string): string {
+  const encoded = Buffer.from(script, 'utf16le').toString('base64')
+  return `powershell -NoProfile -EncodedCommand ${encoded}`
+}
+
+export async function wmiQuery(className: string, whereExpr?: string, properties?: string[]): Promise<string> {
+  const where = whereExpr ? ` | Where-Object { ${whereExpr} }` : ''
+  const select = properties && properties.length > 0 ? ` | Select-Object ${properties.join(',')}` : ''
   return runCmd(
-    `powershell -Command "Get-CimInstance ${query} | ConvertTo-Csv -NoTypeInformation"`,
+    psCmd(`Get-CimInstance ${className}${where}${select} | ConvertTo-Csv -NoTypeInformation`),
     { timeout: 15000 }
   )
 }
 
-// WMI query with filter — returns CSV parsed into array of objects
-// Usage: wmiFilter('Win32_Printer', 'Name LIKE "%VET%"')
-// Escapes single quotes for PowerShell
-export async function wmiFilter(className: string, filter?: string): Promise<string> {
-  const f = filter ? ` -Filter "${filter.replace(/"/g, '\\"')}"` : ''
-  return runCmd(
-    `powershell -Command "Get-CimInstance ${className}${f} | ConvertTo-Csv -NoTypeInformation"`,
-    { timeout: 15000 }
-  )
-}
-
-// WMI action (SET/DELETE) via PowerShell
-export async function wmiAction(className: string, filter: string, action: string): Promise<string> {
-  return runCmd(
-    `powershell -Command "Get-CimInstance ${className} -Filter \\"${filter.replace(/"/g, '\\"')}\\" | ${action}"`,
-    { timeout: 15000 }
-  )
-}
-
-// WMI set property via PowerShell
-export async function wmiSet(className: string, filter: string, properties: Record<string, string>): Promise<string> {
+export async function wmiSet(className: string, whereExpr: string, properties: Record<string, string>): Promise<string> {
   const props = Object.entries(properties)
     .map(([k, v]) => `'${k}'='${v.replace(/'/g, "''")}'`)
-    .join(';')
+    .join('; ')
   return runCmd(
-    `powershell -Command "Get-CimInstance ${className} -Filter \\"${filter.replace(/"/g, '\\"')}\\" | Set-CimInstance -Property @{${props}}"`,
+    psCmd(`Get-CimInstance ${className} | Where-Object { ${whereExpr} } | Set-CimInstance -Property @{ ${props} }`),
     { timeout: 15000 }
   )
 }
 
-// WMI get via PowerShell
-export async function wmiGet(className: string, filter: string, properties: string[]): Promise<string> {
-  const props = properties.join(',')
-  const f = filter ? ` -Filter "${filter.replace(/"/g, '\\"')}"` : ''
+export async function wmiAction(className: string, whereExpr: string, action: string): Promise<string> {
   return runCmd(
-    `powershell -Command "Get-CimInstance ${className}${f} | Select-Object ${props} | ConvertTo-Csv -NoTypeInformation"`,
+    psCmd(`Get-CimInstance ${className} | Where-Object { ${whereExpr} } | ${action}`),
     { timeout: 15000 }
   )
 }
 
 // Parse PowerShell CSV output (ConvertTo-Csv format with headers)
-// Returns array of header + data rows (first row is header)
+// Returns array of rows (first row is header)
 export function parseCSV(csv: string): string[][] {
-  const lines = csv.split('\n').map(l => l.trim()).filter(l => l.length > 0)
-  // Filter out non-data lines, keep quoted CSV lines
-  return lines.filter(l => l.startsWith('"'))
-    .map(l => l.split('","').map(s => s.replace(/^"|"$/g, '')))
+  const lines = csv.split('\n').map(l => l.trim()).filter(l => l.startsWith('"'))
+  return lines.map(l => l.split('","').map(s => s.replace(/^"|"$/g, '')))
 }
 
 // Registry read helper

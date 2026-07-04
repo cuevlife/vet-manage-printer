@@ -1,5 +1,5 @@
 import { USBDevice, USB_KEYWORDS, VID_PID_MAP } from './types'
-import { wmiFilter, runCmd, readRegistry, enumRegistryKeys, parseCSV } from './utils'
+import { wmiQuery, runCmd, readRegistry, enumRegistryKeys, parseCSV } from './utils'
 
 function matchesKeywords(model: string, keywords: string[]): boolean {
   const upper = model.toUpperCase()
@@ -37,7 +37,7 @@ async function getRegistryPorts(): Promise<RegistryPortInfo[]> {
 async function getActiveUSBDevices(): Promise<USBDevice[]> {
   const devices: USBDevice[] = []
   try {
-    const raw = await wmiFilter('Win32_PnPEntity', "PNPClass = 'USB' OR PNPClass = 'System'")
+    const raw = await wmiQuery('Win32_PnPEntity', "$_.PNPClass -eq 'USB' -or $_.PNPClass -eq 'System'")
     const rows = parseCSV(raw)
     const header = rows[0]
     if (!header) return []
@@ -85,7 +85,7 @@ async function getActiveUSBDevices(): Promise<USBDevice[]> {
 async function getUSBPRINTDevices(): Promise<USBDevice[]> {
   const devices: USBDevice[] = []
   try {
-    const raw = await wmiFilter('Win32_PnPEntity', "DeviceID LIKE 'USBPRINT%'")
+    const raw = await wmiQuery('Win32_PnPEntity', "$_.DeviceID -like 'USBPRINT*'")
     const rows = parseCSV(raw)
     const header = rows[0]
     if (!header) return []
@@ -128,7 +128,7 @@ async function getUSBPRINTDevices(): Promise<USBDevice[]> {
 
 async function verifyPortActive(portName: string): Promise<boolean> {
   try {
-    const raw = await wmiFilter('Win32_PnPEntity', `DeviceID LIKE '%USBPRINT%${portName}%'`)
+    const raw = await wmiQuery('Win32_PnPEntity', `$_.DeviceID -like '*USBPRINT*${portName}*'`)
     return raw.includes('OK') || raw.includes(portName)
   } catch {
     return false
@@ -192,7 +192,7 @@ export async function detectUSBPort(type: 'label' | 'bill'): Promise<USBDevice |
 
   // Method 5: Printer port description
   try {
-    const raw = await wmiFilter('Win32_PrinterPort')
+    const raw = await wmiQuery('Win32_PrinterPort')
     const rows = parseCSV(raw)
     const header = rows[0]
     if (header) {
