@@ -73,11 +73,9 @@ export async function installPrinter(
       }
     }
 
-    progress('install-printer', 60, `กำลังติดตั้ง ${config.printerName}...`)
-    await installPrinterViaPrintUI(infPath, config.printerName)
-
+    progress('install-printer', 60, `กำลังติดตั้ง ${config.printerName} (${config.driverName})...`)
+    await installPrinterViaPrintUI(infPath, config.printerName, config.driverName, portName || undefined)
     if (portName) {
-      progress('config-port', 75, `กำลังตั้งค่าพอร์ต ${portName}...`)
       await wmiSet('Win32_Printer', `\$_.Name -eq '${config.printerName}'`, { PortName: portName }).catch(() => {})
     }
 

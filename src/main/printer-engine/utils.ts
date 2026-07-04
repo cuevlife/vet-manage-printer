@@ -124,11 +124,12 @@ export async function removeDriverViaPnputil(oemId: string): Promise<string> {
 }
 
 // Install printer via printui.dll
-export async function installPrinterViaPrintUI(infPath: string, printerName: string): Promise<string> {
-  return runCmd(
-    `rundll32 printui.dll,PrintUIEntry /il /f "${infPath}" /q /b "${printerName}"`,
-    { timeout: 60000 }
-  )
+// /if = install from INF, /f = INF path, /b = printer name, /m = model name, /r = port name
+export async function installPrinterViaPrintUI(infPath: string, printerName: string, modelName?: string, portName?: string): Promise<string> {
+  let cmd = `rundll32 printui.dll,PrintUIEntry /if /f "${infPath}" /b "${printerName}" /q`
+  if (modelName) cmd += ` /m "${modelName}"`
+  if (portName) cmd += ` /r "${portName}"`
+  return runCmd(cmd, { timeout: 60000 })
 }
 
 // Remove printer via printui.dll

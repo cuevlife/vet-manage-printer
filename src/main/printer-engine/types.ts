@@ -87,14 +87,14 @@ export const PRINTER_DEFINITIONS: Record<string, Omit<PrinterConfig, 'connection
     printerName: 'VET Label',
     printerType: 'label',
     infPath: 'resources\\drivers\\label\\Xprinter.inf',
-    driverName: 'AUTO',
+    driverName: 'Xprinter XP-420B',
     configDatPath: 'resources\\drivers\\label\\VetLabelConfig.dat'
   },
   bill: {
     printerName: 'VET Bill',
     printerType: 'bill',
     infPath: 'resources\\drivers\\bill\\Windows x64\\XPDRVx64.INF',
-    driverName: 'AUTO',
+    driverName: 'XP-80',
     configDatPath: 'resources\\drivers\\bill\\VetBillConfig.dat'
   }
 }
