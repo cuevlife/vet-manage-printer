@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { registerIpcHandlers } from './ipc-handlers'
 
@@ -20,6 +20,21 @@ function createWindow() {
       sandbox: false
     }
   })
+
+  // Window controls
+  ipcMain.on('window:minimize', () => mainWindow?.minimize())
+  ipcMain.on('window:maximize', () => {
+    if (mainWindow?.isMaximized()) {
+      mainWindow.unmaximize()
+    } else {
+      mainWindow?.maximize()
+    }
+  })
+  ipcMain.on('window:close', () => mainWindow?.close())
+
+  // Track maximize state
+  mainWindow.on('maximize', () => mainWindow?.webContents.send('window:maximized-change', true))
+  mainWindow.on('unmaximize', () => mainWindow?.webContents.send('window:maximized-change', false))
 
   registerIpcHandlers()
 
