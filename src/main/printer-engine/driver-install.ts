@@ -3,7 +3,7 @@ import { detectUSBPort, listAllUSBDevices } from './usb-detection'
 import {
   addDriverViaPnputil, installPrinterViaPrintUI, removePrinterViaPrintUI,
   createTCPIPPort, runCmd, fileExists, killProcess, removeDriverViaPnputil,
-  wmiSet, wmiQuery, parseCSV, wmiAction
+  wmiSet, wmiQuery, parseCSV, wmiAction, restorePrinterConfig
 } from './utils'
 import { app } from 'electron'
 import { join } from 'path'
@@ -80,8 +80,8 @@ export async function installPrinter(
     }
 
     if (configDatPath && existsSync(configDatPath)) {
-      progress('restore-config', 85, 'กำลังกู้คืนการตั้งค่า...')
-      await wmiSet('Win32_Printer', `\$_.Name -eq '${config.printerName}'`, { ConfigFile: configDatPath }).catch(() => {})
+      progress('restore-config', 85, 'กำลังกู้คืนการตั้งค่า (ขนาด Label/Bill)...')
+      await restorePrinterConfig(config.printerName, configDatPath).catch(() => {})
     }
 
     progress('finalize', 95, 'กำลังตั้งค่าเริ่มต้น...')
