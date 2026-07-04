@@ -20,8 +20,10 @@ export default function Dashboard() {
 
   const [labelPort, setLabelPort] = useState<USBDevice | null>(null)
   const [labelScanning, setLabelScanning] = useState(false)
+  const [labelScanned, setLabelScanned] = useState(false)
   const [billPort, setBillPort] = useState<USBDevice | null>(null)
   const [billScanning, setBillScanning] = useState(false)
+  const [billScanned, setBillScanned] = useState(false)
 
   useEffect(() => {
     run().finally(() => setScanDone(true))
@@ -30,22 +32,30 @@ export default function Dashboard() {
   const scanLabelPort = async () => {
     setLabelScanning(true)
     setLabelPort(null)
+    setLabelScanned(false)
     try {
       const port = await printerApi.detectPortForType('label')
       setLabelPort(port)
+    } catch {
+      setLabelPort(null)
     } finally {
       setLabelScanning(false)
+      setLabelScanned(true)
     }
   }
 
   const scanBillPort = async () => {
     setBillScanning(true)
     setBillPort(null)
+    setBillScanned(false)
     try {
       const port = await printerApi.detectPortForType('bill')
       setBillPort(port)
+    } catch {
+      setBillPort(null)
     } finally {
       setBillScanning(false)
+      setBillScanned(true)
     }
   }
 
@@ -105,7 +115,9 @@ export default function Dashboard() {
           details={
             labelPort
               ? [`✅ พอร์ต: ${labelPort.portName || labelPort.model}`, ...(report?.label.details || [])]
-              : report?.label.details
+              : labelScanned
+                ? ['⚠️ ไม่พบพอร์ต USB สำหรับ Label — ตรวจสอบสายและเปิดเครื่องพิมพ์']
+                : report?.label.details
           }
           actions={
             <>
@@ -113,9 +125,11 @@ export default function Dashboard() {
                 <Search size={14} className={labelScanning ? 'animate-spin mr-1' : 'mr-1'} />
                 {labelScanning ? 'กำลังค้นหา...' : labelPort ? 'ค้นหาใหม่' : 'หา Port'}
               </Button>
-              <Button size="sm" variant="outline" onClick={() => printerApi.testPrint('VET Label').catch(() => {})}>
-                ทดสอบพิมพ์
-              </Button>
+              {report?.label.installed && (
+                <Button size="sm" variant="outline" onClick={() => printerApi.testPrint('VET Label').catch(() => {})}>
+                  ทดสอบพิมพ์
+                </Button>
+              )}
               <Button size="sm" onClick={() => navigate('/install')}>
                 {report?.label.installed ? 'ซ่อม' : 'ติดตั้ง'}
               </Button>
@@ -130,7 +144,9 @@ export default function Dashboard() {
           details={
             billPort
               ? [`✅ พอร์ต: ${billPort.portName || billPort.model}`, ...(report?.bill.details || [])]
-              : report?.bill.details
+              : billScanned
+                ? ['⚠️ ไม่พบพอร์ต USB สำหรับ Bill — ตรวจสอบสายและเปิดเครื่องพิมพ์']
+                : report?.bill.details
           }
           actions={
             <>
@@ -138,9 +154,11 @@ export default function Dashboard() {
                 <Search size={14} className={billScanning ? 'animate-spin mr-1' : 'mr-1'} />
                 {billScanning ? 'กำลังค้นหา...' : billPort ? 'ค้นหาใหม่' : 'หา Port'}
               </Button>
-              <Button size="sm" variant="outline" onClick={() => printerApi.testPrint('VET Bill').catch(() => {})}>
-                ทดสอบพิมพ์
-              </Button>
+              {report?.bill.installed && (
+                <Button size="sm" variant="outline" onClick={() => printerApi.testPrint('VET Bill').catch(() => {})}>
+                  ทดสอบพิมพ์
+                </Button>
+              )}
               <Button size="sm" onClick={() => navigate('/install')}>
                 {report?.bill.installed ? 'ซ่อม' : 'ติดตั้ง'}
               </Button>

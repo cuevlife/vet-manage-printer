@@ -33,7 +33,7 @@ export function runCmdSync(cmd: string): string {
 //   "$_.DeviceID -like 'USBPRINT*'"
 
 function psCmd(script: string): string {
-  const encoded = Buffer.from(script, 'utf16le').toString('base64')
+  const encoded = Buffer.from(script + '; exit 0', 'utf16le').toString('base64')
   return `powershell -NoProfile -EncodedCommand ${encoded}`
 }
 
