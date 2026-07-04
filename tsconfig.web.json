@@ -15,5 +15,5 @@
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "include": ["src/renderer/**/*", "src/renderer/*"]
+  "include": ["src/renderer/**/*", "src/renderer/*", "src/main/printer-engine/types.ts"]
 }
