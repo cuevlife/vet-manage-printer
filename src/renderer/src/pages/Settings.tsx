@@ -85,7 +85,11 @@ export default function Settings() {
               setUninstalling('java')
               setResult(null)
               const ok = await printerApi.uninstallJava()
-              setResult({ component: 'Java' as ComponentType, success: ok, error: ok ? undefined : 'ไม่พบ Java ในระบบ' })
+              setResult({
+                component: 'Java' as ComponentType,
+                success: ok,
+                error: ok ? undefined : 'ไม่พบ Java Registry entry สำหรับถอน หรือถอนไม่สำเร็จ'
+              })
               setUninstalling(null)
             }}
             disabled={uninstalling === 'java'}
