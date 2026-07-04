@@ -37,12 +37,11 @@ async function getRegistryPorts(): Promise<RegistryPortInfo[]> {
 async function getActiveUSBDevices(): Promise<USBDevice[]> {
   const devices: USBDevice[] = []
   try {
-    const raw = await wmiQuery('Win32_PnPEntity', "$_.PNPClass -eq 'USB' -or $_.PNPClass -eq 'System'")
+    const raw = await wmiQuery('Win32_PnPEntity', "$_.PNPClass -eq 'USB' -or $_.PNPClass -eq 'System'", ['DeviceID', 'PNPDeviceID', 'Status', 'Caption', 'PNPClass'])
     const rows = parseCSV(raw)
     const header = rows[0]
     if (!header) return []
-    const dataRows = rows.slice(1)
-    for (const row of dataRows) {
+    for (const row of rows.slice(1)) {
       const status = row[header.indexOf('Status')] || ''
       const pnpId = row[header.indexOf('PNPDeviceID')] || ''
       const caption = row[header.indexOf('Caption')] || ''
@@ -85,7 +84,7 @@ async function getActiveUSBDevices(): Promise<USBDevice[]> {
 async function getUSBPRINTDevices(): Promise<USBDevice[]> {
   const devices: USBDevice[] = []
   try {
-    const raw = await wmiQuery('Win32_PnPEntity', "$_.DeviceID -like 'USBPRINT*'")
+    const raw = await wmiQuery('Win32_PnPEntity', "$_.DeviceID -like 'USBPRINT*'", ['DeviceID', 'Status', 'Caption'])
     const rows = parseCSV(raw)
     const header = rows[0]
     if (!header) return []
@@ -128,8 +127,8 @@ async function getUSBPRINTDevices(): Promise<USBDevice[]> {
 
 async function verifyPortActive(portName: string): Promise<boolean> {
   try {
-    const raw = await wmiQuery('Win32_PnPEntity', `$_.DeviceID -like '*USBPRINT*${portName}*'`)
-    return raw.includes('OK') || raw.includes(portName)
+    const raw = await wmiQuery('Win32_PnPEntity', `$_.DeviceID -like '*USBPRINT*${portName}*'`, ['Status'])
+    return raw.includes('OK')
   } catch {
     return false
   }
@@ -192,7 +191,7 @@ export async function detectUSBPort(type: 'label' | 'bill'): Promise<USBDevice |
 
   // Method 5: Printer port description
   try {
-    const raw = await wmiQuery('Win32_PrinterPort')
+    const raw = await wmiQuery('Win32_PrinterPort', undefined, ['Name', 'Description'])
     const rows = parseCSV(raw)
     const header = rows[0]
     if (header) {
